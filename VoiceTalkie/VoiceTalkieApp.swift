@@ -10,6 +10,9 @@ import SwiftData
 
 @main
 struct VoiceTalkieApp: App {
+    // AppDelegate for menu bar management
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
