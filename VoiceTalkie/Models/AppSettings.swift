@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 /// Application settings data model
 class AppSettings: ObservableObject {
@@ -19,6 +20,14 @@ class AppSettings: ObservableObject {
     
     @AppStorage("autoDownloadModel") 
     var autoDownloadModel: Bool = false
+    
+    @AppStorage("whisperPrompt")
+    var whisperPrompt: String = ""
+    
+    // MARK: - Audio Input Settings
+    
+    @AppStorage("selectedAudioInputDevice")
+    var selectedAudioInputDeviceID: String = "" // 空表示使用系统默认设备
     
     // MARK: - Recording Mode Settings
     
@@ -50,6 +59,9 @@ class AppSettings: ObservableObject {
     
     // MARK: - Hotkey Settings
     
+    @AppStorage("hotkeyMode")
+    var hotkeyMode: String = HotkeyMode.combination.rawValue
+    
     @AppStorage("hotkeyModifiers") 
     var hotkeyModifiers: Int = 0
     
@@ -63,6 +75,9 @@ class AppSettings: ObservableObject {
     
     @AppStorage("textInputMethod") 
     var textInputMethod: String = TextInputMethod.simulate.rawValue
+    
+    @AppStorage("autoInputEnabled")
+    var autoInputEnabled: Bool = true
     
     @AppStorage("autoCorrection") 
     var autoCorrection: Bool = true
@@ -197,6 +212,33 @@ enum AudioQuality: String, CaseIterable, Identifiable {
         case .low: return 16000
         case .medium: return 24000
         case .high: return 48000
+        }
+    }
+}
+
+// MARK: - Hotkey Mode
+
+enum HotkeyMode: String, CaseIterable, Identifiable {
+    case singleKey = "single"
+    case combination = "combination"
+    
+    var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .singleKey:
+            return "单键模式"
+        case .combination:
+            return "组合键模式"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .singleKey:
+            return "使用单个按键作为快捷键（推荐使用功能键如 F13-F19）"
+        case .combination:
+            return "使用组合键作为快捷键（如 Cmd+Shift+Space）"
         }
     }
 }

@@ -20,21 +20,30 @@ class TextInputManager {
     
     /// Insert text at the current cursor position using CGEvent
     func insertText(_ text: String) {
-        guard !text.isEmpty else { return }
-        
-        // Check if we have accessibility permission
-        guard PermissionService.shared.checkAccessibilityPermission() else {
-            print("⚠️ No accessibility permission")
-            PermissionService.shared.promptAccessibilityPermission()
+        print("⌨️ [TextInputManager] insertText() called")
+        print("📝 [TextInputManager] Text to insert: '\(text)' (\(text.count) characters)")
+        guard !text.isEmpty else {
+            print("⚠️ [TextInputManager] Text is empty, skipping")
             return
         }
         
+        // Check if we have accessibility permission
+        guard PermissionService.shared.checkAccessibilityPermission() else {
+            print("❌ [TextInputManager] No accessibility permission")
+            PermissionService.shared.promptAccessibilityPermission()
+            return
+        }
+        print("✅ [TextInputManager] Accessibility permission granted")
+        
         // Get current application
         let currentApp = NSWorkspace.shared.frontmostApplication
-        print("📝 Inserting text into: \(currentApp?.localizedName ?? "Unknown")")
+        print("📝 [TextInputManager] Target app: \(currentApp?.localizedName ?? "Unknown")")
         
         // Simulate typing each character
+        print("🚀 [TextInputManager] Starting character-by-character insertion...")
+        var charCount = 0
         for character in text {
+            charCount += 1
             if character == "\n" {
                 // Handle newline
                 simulateKeyPress(keyCode: UInt16(kVK_Return))
@@ -47,34 +56,43 @@ class TextInputManager {
             usleep(10000) // 10ms
         }
         
-        print("✅ Text inserted: \(text.prefix(50))...")
+        print("✅ [TextInputManager] Inserted \(charCount) characters successfully")
     }
     
     /// Insert text using pasteboard (alternative method)
     func insertTextViaPaste(_ text: String) {
-        guard !text.isEmpty else { return }
+        print("📋 [TextInputManager] insertTextViaPaste() called")
+        print("📝 [TextInputManager] Text to paste: '\(text)' (\(text.count) characters)")
+        guard !text.isEmpty else {
+            print("⚠️ [TextInputManager] Text is empty, skipping")
+            return
+        }
         
+        print("💾 [TextInputManager] Saving current pasteboard content")
         // Save current pasteboard content
         let pasteboard = NSPasteboard.general
         let savedContent = pasteboard.string(forType: .string)
         
         // Set new content
+        print("📋 [TextInputManager] Setting text to pasteboard")
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         
         // Simulate Cmd+V
+        print("⌨️ [TextInputManager] Simulating Cmd+V")
         simulatePaste()
         
         // Wait a bit for paste to complete
         usleep(100000) // 100ms
         
         // Restore original pasteboard content
+        print("♻️ [TextInputManager] Restoring original pasteboard content")
         pasteboard.clearContents()
         if let savedContent = savedContent {
             pasteboard.setString(savedContent, forType: .string)
         }
         
-        print("✅ Text pasted: \(text.prefix(50))...")
+        print("✅ [TextInputManager] Text pasted successfully")
     }
     
     // MARK: - Helper Methods

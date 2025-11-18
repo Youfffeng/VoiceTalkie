@@ -13,7 +13,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private let coordinator = VoiceTalkieCoordinator.shared
     private var settingsWindow: NSWindow?
-    private var settingsWindowObserver: NSObjectProtocol?  // 保存观察者以便移除
     private var recordingIndicatorWindow: RecordingIndicatorWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -107,21 +106,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-
-    
+               
     @objc private func openSettings() {
-        // 如果设置窗口已存在且有效，直接显示
-        if let window = settingsWindow, window.isVisible || window.occlusionState.contains(.visible) {
+        // 如果设置窗口已存在，直接显示
+        if let window = settingsWindow {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
-        }
-        
-        // 清理之前的观察者（如果存在）
-        if let observer = settingsWindowObserver {
-            NotificationCenter.default.removeObserver(observer)
-            settingsWindowObserver = nil
-            print("🧹 [AppDelegate] 清理了旧的窗口观察者")
         }
         
         // 创建设置窗口
@@ -142,32 +133,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 激活应用
         NSApp.activate(ignoringOtherApps: true)
-        
-        // 监听窗口关闭事件，清理引用
-        settingsWindowObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] notification in
-            guard let window = notification.object as? NSWindow else { return }
-            
-            // 1. 先清空 contentViewController，让 SwiftUI 视图安全销毁
-            DispatchQueue.main.async {
-                window.contentViewController = nil
-            }
-            
-            // 2. 延迟移除观察者和清理引用
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                // 移除观察者
-                if let observer = self?.settingsWindowObserver {
-                    NotificationCenter.default.removeObserver(observer)
-                    self?.settingsWindowObserver = nil
-                }
-                // 清理窗口引用
-                self?.settingsWindow = nil
-                print("🗑️ [AppDelegate] 设置窗口已关闭，观察者已移除")
-            }
-        }
         
         settingsWindow = window
     }

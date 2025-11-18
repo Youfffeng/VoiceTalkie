@@ -13,9 +13,9 @@ class RecordingIndicatorWindow: NSPanel {
     private var hostingView: NSHostingView<RecordingIndicatorView>?
     
     init() {
-        // Create window with floating level
+        // Create compact floating window
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 150),
+            contentRect: NSRect(x: 0, y: 0, width: 280, height: 70),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false

@@ -7,6 +7,7 @@
 
 import Foundation
 import Carbon
+import AppKit
 
 /// Utility for mapping key codes and modifiers
 struct KeyCodeMapper {

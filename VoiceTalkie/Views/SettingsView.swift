@@ -8,16 +8,24 @@
 import SwiftUI
 
 struct SettingsView: View {
+    // 对于单例对象，应使用 @ObservedObject 而不是 @StateObject
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject var whisperManager = WhisperManager.shared
     @ObservedObject var hotkeyManager = HotkeyManager.shared
+    @ObservedObject var audioRecorder = AudioRecorder.shared
     
     @State private var isRecordingHotkey = false
     
     var body: some View {
         Form {
+            // 音频输入设备选择
+            audioInputSection
+            
             // WhisperKit Model Section
             modelSection
+            
+            // Prompt Section - 新增提示词设置
+            promptSection
             
             // Recording Mode Section
             recordingModeSection
@@ -35,21 +43,93 @@ struct SettingsView: View {
             autoInputSection
         }
         .formStyle(.grouped)
-        .frame(width: 500, height: 600)
+        .frame(width: 500, height: 650)
+        .onAppear {
+            // 刷新设备列表
+            audioRecorder.refreshAvailableDevices()
+        }
+        .onDisappear {
+            // 窗口关闭时停止所有更新，避免 Metal 渲染错误
+            isRecordingHotkey = false
+            
+            // 强制在主线程执行清理
+            DispatchQueue.main.async {
+                print("🧹 [SettingsView] onDisappear - 视图已销毁")
+            }
+        }
     }
     
     // MARK: - Model Section
+    
+    // MARK: - Audio Input Section
+    
+    private var audioInputSection: some View {
+        Section {
+            Picker("输入设备", selection: $settings.selectedAudioInputDeviceID) {
+                // 系统默认选项
+                Text("🎵 系统默认")
+                    .tag("")
+                
+                // 可用设备列表
+                ForEach(audioRecorder.availableInputDevices) { device in
+                    HStack {
+                        Text(device.name)
+                        if device.isDefault {
+                            Text("(默认)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .tag(device.id)
+                }
+            }
+            
+            Button("🔄 刷新设备列表") {
+                audioRecorder.refreshAvailableDevices()
+            }
+        } header: {
+            Text("🎤 麦克风设置")
+        } footer: {
+            Text("选择用于录音的麦克风设备。选择“系统默认”将使用 macOS 系统设置中的默认输入设备。")
+                .font(.caption)
+        }
+    }
     
     private var modelSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
                 Picker("whisper_model", selection: $settings.selectedModel) {
                     ForEach(WhisperModel.allCases, id: \.self) { model in
-                        VStack(alignment: .leading) {
-                            Text(model.rawValue.capitalized)
-                            Text(modelDescription(for: model))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(model.rawValue.capitalized)
+                                Text(modelDescription(for: model))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            // 显示本地状态
+                            if whisperManager.isModelAvailableLocally(model) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                        .font(.caption)
+                                    Text("本地")
+                                        .font(.caption2)
+                                        .foregroundColor(.green)
+                                }
+                            } else {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle")
+                                        .foregroundColor(.orange)
+                                        .font(.caption)
+                                    Text("需下载")
+                                        .font(.caption2)
+                                        .foregroundColor(.orange)
+                                }
+                            }
                         }
                         .tag(model.rawValue)
                     }
@@ -79,7 +159,87 @@ struct SettingsView: View {
         } header: {
             Text("recognition_model")
         } footer: {
-            Text("model_footer_description")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("model_footer_description")
+                    .font(.caption)
+                
+                if let selectedModel = WhisperModel(rawValue: settings.selectedModel),
+                   whisperManager.isModelAvailableLocally(selectedModel) {
+                    Text("✅ 当前模型已在本地，无需下载")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                } else {
+                    Text("⚠️ 首次使用该模型需要从网络下载")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Prompt Section
+    
+    private var promptSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("提示词内容")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                TextEditor(text: $settings.whisperPrompt)
+                    .font(.system(size: 12))
+                    .frame(height: 60)
+                    .padding(4)
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+                
+                if settings.whisperPrompt.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("✏️ 提示词示例")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                        
+                        Text("专业术语：API、服务器、数据库、编程、代码")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("日常对话：你好、谢谢、再见、请问")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    HStack {
+                        Text("当前字符数: \(settings.whisperPrompt.count)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Button("清空") {
+                            settings.whisperPrompt = ""
+                        }
+                        .font(.caption2)
+                        .buttonStyle(.plain)
+                        .foregroundColor(.blue)
+                    }
+                }
+            }
+        } header: {
+            Text("📝 Whisper 提示词设置")
+        } footer: {
+            Text("""
+            提示词可以帮助 Whisper 模型更准确地识别特定词汇和专业术语。
+            • 提供常用专业术语、人名、地名等
+            • 指定说话风格和上下文
+            • 纠正常见错误识别
+            
+            注意：提示词太长可能影响性能，建议保持在 100 字以内。
+            """)
                 .font(.caption)
         }
     }
@@ -107,6 +267,23 @@ struct SettingsView: View {
     
     private var hotkeySection: some View {
         Section {
+            // 热键模式选择
+            Picker("热键模式", selection: $settings.hotkeyMode) {
+                ForEach(HotkeyMode.allCases) { mode in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(mode.displayName)
+                        Text(mode.description)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .tag(mode.rawValue)
+                }
+            }
+            .pickerStyle(.radioGroup)
+            
+            Divider()
+            
+            // 热键设置
             HStack {
                 Text("global_hotkey")
                 
@@ -126,9 +303,15 @@ struct SettingsView: View {
             }
             
             if isRecordingHotkey {
-                Text("press_hotkey_hint")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if settings.hotkeyMode == HotkeyMode.singleKey.rawValue {
+                    Text("请按下你想要设置的单键（推荐使用 F13-F19 等功能键）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("press_hotkey_hint")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         } header: {
             Text("hotkey_settings")
@@ -206,6 +389,8 @@ struct SettingsView: View {
             return "~245MB, 推荐使用"
         case .medium:
             return "~769MB, 高精度但较慢"
+        case .largeV3:
+            return "~1.5GB, 最佳精度，较慢"
         }
     }
     

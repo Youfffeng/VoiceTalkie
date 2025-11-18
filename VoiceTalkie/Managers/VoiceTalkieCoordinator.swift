@@ -88,63 +88,101 @@ class VoiceTalkieCoordinator: ObservableObject {
     // MARK: - Hotkey Handling
     
     private func handleHotkeyPressed() async {
-        print("🎤 Hotkey pressed")
+        print("\n🎤 [Coordinator] ========== HOTKEY PRESSED ==========")
+        print("📊 [Coordinator] Current state: isRecording=\(isRecording), isTranscribing=\(isTranscribing)")
+        print("🎚️ [Coordinator] Recording mode: \(recordingMode.rawValue)")
         
         switch recordingMode {
         case .holdToSpeak:
-            // Start recording on press
-            await startRecording()
+            // 在按住模式下，只在第一次按下时启动录音
+            if !isRecording {
+                print("🔵 [Coordinator] Mode: Hold-to-speak - Starting recording")
+                await startRecording()
+            } else {
+                print("🔁 [Coordinator] Mode: Hold-to-speak - Already recording, ignoring repeated keydown")
+            }
             
         case .clickToToggle:
-            // Toggle recording
+            print("🔵 [Coordinator] Mode: Click-to-toggle")
             if isRecording {
+                print("⏹️ [Coordinator] Already recording, stopping and transcribing")
                 await stopRecordingAndTranscribe()
             } else {
+                print("▶️ [Coordinator] Not recording, starting now")
                 await startRecording()
                 isToggledRecording = true
             }
         }
+        print("🎤 [Coordinator] ========== HOTKEY PRESSED END ==========")
+        print("")
     }
     
     private func handleHotkeyReleased() async {
-        print("🎤 Hotkey released")
+        print("\n🎤 [Coordinator] ========== HOTKEY RELEASED ==========")
+        print("📊 [Coordinator] Current state: isRecording=\(isRecording), recordingMode=\(recordingMode.rawValue)")
         
         // Only handle release in hold-to-speak mode
         if recordingMode == .holdToSpeak && isRecording {
+            print("⏹️ [Coordinator] Hold-to-speak mode + is recording, stopping and transcribing")
             await stopRecordingAndTranscribe()
+        } else {
+            print("⚠️ [Coordinator] Ignoring release (mode=\(recordingMode.rawValue), isRecording=\(isRecording))")
         }
+        print("🎤 [Coordinator] ========== HOTKEY RELEASED END ==========")
+        print("")
     }
     
     // MARK: - Recording
     
     private func startRecording() async {
-        guard !isRecording else { return }
+        print("🎬 [Coordinator] startRecording() called")
+        guard !isRecording else {
+            print("⚠️ [Coordinator] Already recording, ignoring")
+            return
+        }
         
-        print("▶️ Starting recording...")
+        print("▶️ [Coordinator] Initializing recording...")
         currentText = ""
         
+        // Check microphone permission before starting recording
+        let authorized = await permissionService.ensureMicrophoneAuthorized()
+        guard authorized else {
+            print("❌ [Coordinator] Microphone not authorized, aborting startRecording")
+            return
+        }
+        
         do {
-            try audioRecorder.startRecording()
+            print("🎙️ [Coordinator] Calling audioRecorder.startRecording()")
+            try await audioRecorder.startRecording()
             isRecording = true
             notifyStateChanged()
+            print("✅ [Coordinator] Recording started successfully")
         } catch {
-            print("❌ Failed to start recording: \(error)")
+            print("❌ [Coordinator] Failed to start recording: \(error)")
+            print("❌ [Coordinator] Error details: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
     }
     
     private func stopRecordingAndTranscribe() async {
-        guard isRecording else { return }
+        print("\n⏹️ [Coordinator] ========== STOP RECORDING & TRANSCRIBE ==========")
+        guard isRecording else {
+            print("⚠️ [Coordinator] Not recording, ignoring stop request")
+            return
+        }
         
-        print("⏹️ Stopping recording...")
+        print("⏹️ [Coordinator] Stopping audio recorder...")
         
         // Stop recording and get audio file
         guard let audioURL = audioRecorder.stopRecording() else {
-            print("❌ No audio file")
+            print("❌ [Coordinator] No audio file returned from recorder")
             isRecording = false
             notifyStateChanged()
             return
         }
+        
+        print("📁 [Coordinator] Audio file saved at: \(audioURL.path)")
+        print("📊 [Coordinator] File size: \(String(describing: try? FileManager.default.attributesOfItem(atPath: audioURL.path)[.size])) bytes")
         
         isRecording = false
         isTranscribing = true
@@ -152,41 +190,84 @@ class VoiceTalkieCoordinator: ObservableObject {
         
         // Transcribe audio
         do {
-            print("🔄 Transcribing audio...")
+            print("🔄 [Coordinator] Starting transcription with WhisperKit...")
+            print("🤖 [Coordinator] WhisperKit initialized: \(whisperManager.isInitialized)")
+            print("📝 [Coordinator] Current model: \(whisperManager.currentModel.rawValue)")
+            
             let result = try await whisperManager.transcribe(audioURL: audioURL)
             currentText = result.text
             
-            print("✅ Transcription complete: \(result.text)")
+            print("✅ [Coordinator] Transcription complete!")
+            print("📝 [Coordinator] Transcribed text: '\(result.text)'")
+            print("📏 [Coordinator] Text length: \(result.text.count) characters")
             
             // Insert text
-            insertTranscribedText(result.text)
+            if !result.text.isEmpty {
+                print("⌨️ [Coordinator] Inserting text into active application...")
+                insertTranscribedText(result.text)
+            } else {
+                print("⚠️ [Coordinator] Transcription returned empty text")
+            }
             
             // Cleanup temp file
+            print("🗑️ [Coordinator] Cleaning up temp audio file")
             try? FileManager.default.removeItem(at: audioURL)
             
         } catch {
-            print("❌ Transcription failed: \(error)")
+            print("❌ [Coordinator] Transcription failed!")
+            print("❌ [Coordinator] Error: \(error)")
+            print("❌ [Coordinator] Error description: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
         
         isTranscribing = false
         isToggledRecording = false
         notifyStateChanged()
+        print("⏹️ [Coordinator] ========== STOP RECORDING & TRANSCRIBE END ==========")
+        print("")
     }
     
     // MARK: - Text Insertion
     
     private func insertTranscribedText(_ text: String) {
-        guard !text.isEmpty else { return }
+        print("⌨️ [Coordinator] insertTranscribedText() called")
+        guard !text.isEmpty else {
+            print("⚠️ [Coordinator] Text is empty, skipping insertion")
+            return
+        }
         
         let inputMethod = TextInputMethod(rawValue: settings.textInputMethod) ?? .simulate
+        print("🎚️ [Coordinator] Using input method: \(inputMethod.rawValue)")
         
+        // 暂停快捷键监听，避免捕获自己模拟的按键
+        print("⏸️ [Coordinator] Pausing hotkey monitoring during text input")
+        hotkeyManager.pauseMonitoring()
+        
+        // 执行文本输入
         switch inputMethod {
         case .simulate:
+            print("⌨️ [Coordinator] Calling textInputManager.insertText()")
             textInputManager.insertText(text)
         case .paste:
+            print("📋 [Coordinator] Calling textInputManager.insertTextViaPaste()")
             textInputManager.insertTextViaPaste(text)
         }
+        
+        // ⏰ 等待文本输入完全完成后再恢复监听
+        // 计算所需的延迟时间：字符数 * 每字符延迟 + 额外缓冲时间
+        let charCount = text.count
+        let baseDelay = charCount * 10_000  // 每字符10ms
+        let bufferDelay = 200_000  // 额外200ms缓冲
+        let totalDelay = UInt32(baseDelay + bufferDelay)
+        
+        print("⏰ [Coordinator] Waiting \(Double(totalDelay)/1000.0)ms for text input to complete...")
+        usleep(totalDelay)
+        
+        // 恢复快捷键监听
+        print("▶️ [Coordinator] Resuming hotkey monitoring")
+        hotkeyManager.resumeMonitoring()
+        
+        print("✅ [Coordinator] Text insertion completed")
     }
     
     // MARK: - Manual Control

@@ -25,6 +25,7 @@ class HotkeyManager: ObservableObject {
     
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var isTemporarilyPaused = false  // 新增：临时暂停标志
     
     // Callbacks
     var onHotkeyPressed: (() -> Void)?
@@ -38,14 +39,19 @@ class HotkeyManager: ObservableObject {
     
     /// Start monitoring for global hotkeys
     func startMonitoring() {
-        guard !isMonitoring else { return }
+        print("🎯 [HotkeyManager] startMonitoring called")
+        guard !isMonitoring else {
+            print("⚠️ [HotkeyManager] Already monitoring, skipping")
+            return
+        }
         
         // Check if we have input monitoring permission
         guard PermissionService.shared.checkInputMonitoringPermission() else {
-            print("⚠️ No input monitoring permission")
+            print("❌ [HotkeyManager] No input monitoring permission")
             PermissionService.shared.promptInputMonitoringPermission()
             return
         }
+        print("✅ [HotkeyManager] Input monitoring permission granted")
         
         // Create event tap
         let eventMask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
@@ -62,7 +68,8 @@ class HotkeyManager: ObservableObject {
                 
                 Task { @MainActor in
                     if manager.handleEvent(type: type, event: event) {
-                        return nil  // Consume the event
+                        // Consume the event - return nil wrapped
+                        // But we can't return nil here, just pass through
                     }
                 }
                 
@@ -91,7 +98,9 @@ class HotkeyManager: ObservableObject {
         CGEvent.tapEnable(tap: eventTap, enable: true)
         
         isMonitoring = true
-        print("✅ Hotkey monitoring started")
+        let hotkeyDesc = KeyCodeMapper.hotkeyDescription(keyCode: currentHotkey?.keyCode ?? 0, modifiers: currentHotkey?.modifiers ?? [])
+        print("✅ [HotkeyManager] Hotkey monitoring started successfully")
+        print("🎹 [HotkeyManager] Monitoring hotkey: \(hotkeyDesc)")
     }
     
     /// Stop monitoring for global hotkeys
@@ -110,8 +119,21 @@ class HotkeyManager: ObservableObject {
         eventTap = nil
         runLoopSource = nil
         isMonitoring = false
+        isTemporarilyPaused = false
         
         print("✅ Hotkey monitoring stopped")
+    }
+    
+    /// 临时暂停监听（用于文本输入期间）
+    func pauseMonitoring() {
+        print("⏸️ [HotkeyManager] Pausing monitoring temporarily")
+        isTemporarilyPaused = true
+    }
+    
+    /// 恢复监听
+    func resumeMonitoring() {
+        print("▶️ [HotkeyManager] Resuming monitoring")
+        isTemporarilyPaused = false
     }
     
     /// Set a new hotkey
@@ -125,7 +147,19 @@ class HotkeyManager: ObservableObject {
     // MARK: - Event Handling
     
     private func handleEvent(type: CGEventType, event: CGEvent) -> Bool {
-        guard let (hotkeyCode, hotkeyModifiers) = currentHotkey else { return false }
+        // 如果临时暂停，忽略所有事件
+        guard !isTemporarilyPaused else {
+            return false
+        }
+        
+        guard let (hotkeyCode, hotkeyModifiers) = currentHotkey else { 
+            print("⚠️ [HotkeyManager] No hotkey configured")
+            return false 
+        }
+        
+        // 获取当前的热键模式
+        let settings = AppSettings.shared
+        let isSingleKeyMode = settings.hotkeyMode == HotkeyMode.singleKey.rawValue
         
         switch type {
         case .keyDown:
@@ -133,16 +167,41 @@ class HotkeyManager: ObservableObject {
             let flags = event.flags
             let modifiers = KeyCodeMapper.eventFlagsToModifiers(flags)
             
-            // Check if it matches our hotkey
-            if keyCode == hotkeyCode && modifiers == hotkeyModifiers {
+            let keyDesc = KeyCodeMapper.keyCodeToString(keyCode)
+            let modDesc = KeyCodeMapper.modifiersToString(modifiers)
+            print("⌨️ [HotkeyManager] KeyDown detected: \(modDesc)\(keyDesc)")
+            
+            // 根据模式匹配热键
+            let isMatch: Bool
+            if isSingleKeyMode {
+                // 单键模式：只匹配键码，忽略修饰键
+                isMatch = (keyCode == hotkeyCode)
+                if isMatch {
+                    print("🎯 [HotkeyManager] Single-key hotkey MATCHED (\(keyDesc))")
+                }
+            } else {
+                // 组合键模式：键码和修饰键都必须匹配
+                isMatch = (keyCode == hotkeyCode && modifiers == hotkeyModifiers)
+                if isMatch {
+                    print("🎯 [HotkeyManager] Combination hotkey MATCHED (\(modDesc)\(keyDesc))")
+                }
+            }
+            
+            if isMatch {
+                print("🎯 [HotkeyManager] Hotkey MATCHED! Triggering onHotkeyPressed")
                 onHotkeyPressed?()
                 return true  // Consume the event
+            } else {
+                print("❌ [HotkeyManager] Key does not match hotkey (expected: \(KeyCodeMapper.hotkeyDescription(keyCode: hotkeyCode, modifiers: hotkeyModifiers)))")
             }
             
         case .keyUp:
             let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+            let keyDesc = KeyCodeMapper.keyCodeToString(keyCode)
+            print("⌨️ [HotkeyManager] KeyUp detected: \(keyDesc)")
             
             if keyCode == hotkeyCode {
+                print("🎯 [HotkeyManager] Hotkey RELEASED! Triggering onHotkeyReleased")
                 onHotkeyReleased?()
                 return true  // Consume the event
             }
