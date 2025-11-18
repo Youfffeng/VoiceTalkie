@@ -12,9 +12,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private let coordinator = VoiceTalkieCoordinator.shared
-    private var settingsWindow: NSWindow?
-    private var settingsWindowObserver: NSObjectProtocol?  // 保存观察者以便移除
+    private var settingsPanel: NSPanel?  // 🔑 改为 NSPanel
     private var recordingIndicatorWindow: RecordingIndicatorWindow?
+    
+    // 录音状态通知观察者（可选优化：方便在销毁时移除）
+    private var recordingStateObserver: NSObjectProtocol?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 创建菜单栏图标
@@ -23,34 +25,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 创建录音指示器窗口
         recordingIndicatorWindow = RecordingIndicatorWindow()
         
-        // 隐藏 Dock 图标（可选，如果只想要菜单栏应用）
+        // 隐藏 Dock 图标
         NSApp.setActivationPolicy(.accessory)
-        
-        // 🔍 诊断：检查应用信息
-        Task {
-            print("🔍 [AppDelegate] ========== 应用诊断信息 ==========")
-            print("📱 Bundle ID: \(Bundle.main.bundleIdentifier ?? "未知")")
-            print("📂 Bundle Path: \(Bundle.main.bundlePath)")
-            print("🆔 Process ID: \(ProcessInfo.processInfo.processIdentifier)")
-            
-            // 检查 Info.plist 中的权限描述
-            if let micDesc = Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") as? String {
-                print("✅ NSMicrophoneUsageDescription: \(micDesc)")
-            } else {
-                print("❌ NSMicrophoneUsageDescription 未配置！")
-            }
-            
-            print("🔍 [AppDelegate] ========================================")
-        }
         
         // 初始化协调器
         Task {
             await coordinator.initialize()
         }
         
-        // 监听录音状态变化，显示/隐藏指示器
+        // 监听录音状态变化
         observeCoordinatorState()
     }
+    
+    deinit {
+        // 清理录音状态观察者（防止潜在泄漏/野指针）
+        if let observer = recordingStateObserver {
+            NotificationCenter.default.removeObserver(observer)
+            recordingStateObserver = nil
+        }
+    }
+    
+    // MARK: - 状态栏菜单
     
     private func setupStatusBarItem() {
         // 创建状态栏项目
@@ -71,32 +66,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         
         // 开始录音菜单项
-        menu.addItem(NSMenuItem(
+        let startItem = NSMenuItem(
             title: NSLocalizedString("start_recording", comment: "Start Recording"),
             action: #selector(startRecording),
             keyEquivalent: ""
-        ))
+        )
+        startItem.target = self
+        menu.addItem(startItem)
         
         menu.addItem(NSMenuItem.separator())
         
         // 设置菜单项
-        menu.addItem(NSMenuItem(
+        let settingsItem = NSMenuItem(
             title: NSLocalizedString("settings", comment: "Settings"),
             action: #selector(openSettings),
             keyEquivalent: ","
-        ))
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         
         menu.addItem(NSMenuItem.separator())
         
         // 退出菜单项
-        menu.addItem(NSMenuItem(
+        let quitItem = NSMenuItem(
             title: NSLocalizedString("quit", comment: "Quit VoiceTalkie"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
-        ))
+        )
+        menu.addItem(quitItem)
         
         statusItem?.menu = menu
     }
+    
+    // MARK: - 菜单动作
     
     @objc private func startRecording() {
         Task {
@@ -108,75 +110,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    
     @objc private func openSettings() {
-        // 如果设置窗口已存在且有效，直接显示
-        if let window = settingsWindow, window.isVisible || window.occlusionState.contains(.visible) {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
+        // 如果设置面板已存在且可见，直接显示
+        if let panel = settingsPanel {
+            if panel.isVisible {
+                panel.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            } else {
+                // 面板存在但不可见，说明已关闭，清理引用
+                settingsPanel = nil
+            }
         }
         
-        // 清理之前的观察者（如果存在）
-        if let observer = settingsWindowObserver {
-            NotificationCenter.default.removeObserver(observer)
-            settingsWindowObserver = nil
-            print("🧹 [AppDelegate] 清理了旧的窗口观察者")
-        }
-        
-        // 创建设置窗口
+        // 创建设置视图
         let settingsView = SettingsView()
         let hostingController = NSHostingController(rootView: settingsView)
         
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
-            styleMask: [.titled, .closable, .miniaturizable],
+        // 🔑 关键：使用 NSPanel 而不是 NSWindow
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 650),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         
-        window.title = NSLocalizedString("settings_title", comment: "VoiceTalkie Settings")
-        window.contentViewController = hostingController
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+        panel.title = NSLocalizedString("settings_title", comment: "VoiceTalkie Settings")
+        panel.contentViewController = hostingController
+        panel.center()
+        panel.isFloatingPanel = false
+        panel.becomesKeyOnlyIfNeeded = false
         
-        // 激活应用
-        NSApp.activate(ignoringOtherApps: true)
-        
-        // 监听窗口关闭事件，清理引用
-        settingsWindowObserver = NotificationCenter.default.addObserver(
+        // 监听面板关闭事件
+        NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
-            object: window,
+            object: panel,
             queue: .main
-        ) { [weak self] notification in
-            guard let window = notification.object as? NSWindow else { return }
-            
-            // 1. 先清空 contentViewController，让 SwiftUI 视图安全销毁
+        ) { [weak self] _ in
+            // 延迟清理引用
             DispatchQueue.main.async {
-                window.contentViewController = nil
-            }
-            
-            // 2. 延迟移除观察者和清理引用
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                // 移除观察者
-                if let observer = self?.settingsWindowObserver {
-                    NotificationCenter.default.removeObserver(observer)
-                    self?.settingsWindowObserver = nil
-                }
-                // 清理窗口引用
-                self?.settingsWindow = nil
-                print("🗑️ [AppDelegate] 设置窗口已关闭，观察者已移除")
+                self?.settingsPanel = nil
             }
         }
         
-        settingsWindow = window
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        settingsPanel = panel
     }
     
     // MARK: - Coordinator State Observation
     
     private func observeCoordinatorState() {
-        // 观察录音状态
-        NotificationCenter.default.addObserver(
+        // 如果之前已经有观察者，先移除
+        if let observer = recordingStateObserver {
+            NotificationCenter.default.removeObserver(observer)
+            recordingStateObserver = nil
+        }
+        
+        // 观察录音状态变化
+        recordingStateObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("VoiceTalkieRecordingStateChanged"),
             object: nil,
             queue: .main
@@ -191,8 +184,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else if !coordinator.currentText.isEmpty {
             // 显示识别结果 2 秒后隐藏
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                if !(self?.coordinator.isRecording ?? false) && !(self?.coordinator.isTranscribing ?? false) {
-                    self?.recordingIndicatorWindow?.hide()
+                guard let self = self else { return }
+                if !self.coordinator.isRecording && !self.coordinator.isTranscribing {
+                    self.recordingIndicatorWindow?.hide()
                 }
             }
         } else {
