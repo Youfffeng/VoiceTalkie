@@ -1,13 +1,24 @@
----
 trigger: always_on
 alwaysApply: true
 ---
-一切缺陷，先阅读代码进行推理原因（至少两种以上），梳理解决方案，再寻求人类确认，再执行。
-一切人类提出的需求，如果存在不确定因素，务必进行询问人类确认；一旦开始执行， 务必完整实现，不留todo。
-一切文本都要注重国际化，不要在UI上出现任何硬编码的文本。
+For any defect, first read the code to deduce the cause (at least two possible causes), outline solutions, then seek human confirmation before proceeding.
 
-遇到失败的问题，寻求人类确认，不要自行使用妥协方案。
+For any requirement raised by a human, if there are uncertainties, you must inquire and confirm with the human; once execution begins, ensure full implementation without leaving any TODOs.
 
-各种依赖、镜像等文件等下载，能用国内加速的都用国内加速
+All text must be internationalization-friendly; no hard-coded strings should appear in the UI.
 
-需要sudo权限的终端命令提醒人类接手操作，而不是寻找替代方案。
+When encountering failures, seek human confirmation; do not independently resort to workarounds.
+
+For downloading dependencies, images, files, etc., always use domestic mirrors for acceleration whenever possible.
+
+For terminal commands requiring sudo privileges, alert the human to take over the operation instead of seeking alternatives.
+
+Maintain only a single automated test script.
+
+Maintain only a single automated deployment script.
+
+Maintain only a single automated build script.
+
+Do not use hard-coded text; all displayed text must support internationalization.
+
+If you create a new page, component, or use a new API, remember to update the corresponding documentation.

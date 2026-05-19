@@ -111,17 +111,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
+        print("🔧 [AppDelegate] openSettings called")
+        
         // 如果设置面板已存在且可见，直接显示
         if let panel = settingsPanel {
+            print("📋 [AppDelegate] Settings panel exists, isVisible: \(panel.isVisible)")
             if panel.isVisible {
+                print("✅ [AppDelegate] Bringing existing panel to front")
                 panel.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
                 return
             } else {
                 // 面板存在但不可见，说明已关闭，清理引用
+                print("🗑️ [AppDelegate] Panel exists but not visible, cleaning up")
                 settingsPanel = nil
             }
         }
+        
+        print("🆕 [AppDelegate] Creating new settings panel")
         
         // 创建设置视图
         let settingsView = SettingsView()
@@ -155,6 +162,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        
+        print("✅ [AppDelegate] Settings panel created and shown")
+        print("📋 [AppDelegate] Panel isVisible: \(panel.isVisible), isKeyWindow: \(panel.isKeyWindow)")
         
         settingsPanel = panel
     }

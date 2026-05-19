@@ -120,3 +120,5 @@ merges.txt
 
 # Application Support 中的模型缓存
 Library/Application Support/whisperkit-models/
+
+.qoder/

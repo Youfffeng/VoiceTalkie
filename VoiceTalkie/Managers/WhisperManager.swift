@@ -363,10 +363,17 @@ class WhisperManager: ObservableObject {
             
             var promptTokens: [Int]? = nil
             if !promptText.isEmpty, let tokenizer = whisperKit?.tokenizer {
-                // 将 prompt 文本转换为 tokens
+                // 🎯 正确用法：提示词作为上下文参考，而非强制前缀
+                // 提示词应该是完整的句子，描述音频的上下文、领域或风格
+                // 例如："这是一段关于编程技术的讲座，会提到API、服务器、数据库等术语。"
                 promptTokens = tokenizer.encode(text: promptText).filter { $0 < tokenizer.specialTokens.specialTokenBegin }
                 print("📝 [WhisperManager] Using prompt: '\(promptText)'")
                 print("🔢 [WhisperManager] Prompt tokens count: \(promptTokens?.count ?? 0)")
+                
+                // ⚠️ 提示词限制为 224 tokens
+                if let tokens = promptTokens, tokens.count > 224 {
+                    print("⚠️ [WhisperManager] Prompt exceeds 224 tokens, will be truncated")
+                }
             }
             
             // 🌏 强制使用中文识别
@@ -380,9 +387,9 @@ class WhisperManager: ObservableObject {
                     temperatureFallbackCount: 5,
                     sampleLength: 224,
                     topK: 5,
-                    usePrefillPrompt: true,
+                    usePrefillPrompt: false,  // 🔑 关闭强制前缀模式
                     usePrefillCache: true,
-                    promptTokens: promptTokens  // 使用自定义 prompt
+                    promptTokens: promptTokens  // 作为上下文参考
                 )
             ) ?? []
             

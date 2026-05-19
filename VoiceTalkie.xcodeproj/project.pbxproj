@@ -290,6 +290,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Voice Talkie";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoiceTalkie needs access to your microphone to record audio for speech recognition.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VoiceTalkie uses speech recognition to convert your voice into text.";
@@ -343,6 +344,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Voice Talkie";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoiceTalkie needs access to your microphone to record audio for speech recognition.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "VoiceTalkie uses speech recognition to convert your voice into text.";

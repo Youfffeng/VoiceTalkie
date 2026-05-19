@@ -204,10 +204,10 @@ struct SettingsView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(.secondary)
                         
-                        Text("专业术语：API、服务器、数据库、编程、代码")
+                        Text("技术领域：这是一段关于编程技术的讲座，会提到 API、服务器、数据库等术语。")
                             .font(.caption2)
                             .foregroundColor(.secondary)
-                        Text("日常对话：你好、谢谢、再见、请问")
+                        Text("日常对话：日常对话，包含问候、感谢、告别等礼貌用语。")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -233,12 +233,16 @@ struct SettingsView: View {
             Text("📝 Whisper 提示词设置")
         } footer: {
             Text("""
-            提示词可以帮助 Whisper 模型更准确地识别特定词汇和专业术语。
-            • 提供常用专业术语、人名、地名等
-            • 指定说话风格和上下文
-            • 纠正常见错误识别
+            提示词可以帮助 Whisper 模型更准确地识别特定领域的内容。
             
-            注意：提示词太长可能影响性能，建议保持在 100 字以内。
+            🎯 正确用法：
+            • 使用完整的句子描述音频上下文
+            • 例如："这是一段关于编程技术的讲座，会提到 API、服务器、数据库等术语。"
+            • 或："日常对话，包含问候、感谢、告别等礼貌用语。"
+            
+            ⚠️ 注意：
+            • 提示词限制为 224 个 token（约100字）
+            • 不要只列举关键词，应该组成完整句子
             """)
                 .font(.caption)
         }
